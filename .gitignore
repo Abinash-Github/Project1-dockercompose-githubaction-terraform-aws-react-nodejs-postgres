@@ -1,3 +1,24 @@
+# Dependencies
 node_modules/
+
+# Local database data
 docker_test_db/
-*/.env
+
+# Environment files - NEVER commit these
+.env
+.env.*
+!.env.example
+
+# SSH keys - NEVER commit these
+.ssh/
+
+# Terraform sensitive files
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/.terraform.lock.hcl
+
+# OS files
+.DS_Store
+

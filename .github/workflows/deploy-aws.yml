@@ -1,0 +1,236 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: ap-south-1
+  PROJECT_NAME: user-management-app
+  DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH for GitHub Actions
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
+      - name: Add EC2 host to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Wait for EC2 instance to be ready
+        run: |
+          for i in {1..30}; do
+            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} "[ -f /tmp/deployment-ready.txt ]"; then
+              echo "✓ EC2 instance is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30: Waiting for instance..."
+            sleep 2
+          done
+          echo "✗ Instance failed to become ready"
+          exit 1
+
+      - name: Clone repository on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          APP_DIR=/home/ec2-user/app
+          
+          # Create app directory if not exists
+          mkdir -p $APP_DIR
+          cd $APP_DIR
+          
+          # Initialize git if not already done
+          if [ ! -d .git ]; then
+            git init
+            git remote add origin ${{ github.server_url }}/${{ github.repository }}.git
+          fi
+          
+          # Fetch and checkout latest code
+          git fetch --all --force
+          git checkout -f origin/main
+          echo "✓ Repository cloned/updated successfully"
+          EOF
+
+      - name: Start Docker Compose on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          cd /home/ec2-user/app
+          
+          echo "Stopping existing containers..."
+          docker compose down 2>/dev/null || true
+          
+          echo "Building Docker images..."
+          docker compose build --no-cache
+          
+          echo "Starting Docker containers..."
+          docker compose up -d
+          
+          echo "Waiting for services to initialize..."
+          sleep 5
+          
+          echo "Docker Compose status:"
+          docker compose ps
+          EOF
+
+      - name: Wait for PostgreSQL
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          echo "Waiting for PostgreSQL to be ready..."
+          
+          for i in {1..30}; do
+            if docker compose exec -T postgres pg_isready -U abinash_naik -d docker_compose_test > /dev/null 2>&1; then
+              echo "✓ PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30: PostgreSQL not ready yet..."
+            sleep 2
+          done
+          
+          echo "✗ PostgreSQL failed to start"
+          docker compose logs postgres
+          exit 1
+          EOF
+
+      - name: Wait for Backend API
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          BACKEND_URL="http://127.0.0.1:7999"
+          echo "Waiting for Backend API at $BACKEND_URL..."
+          
+          for i in {1..30}; do
+            if curl -sf "$BACKEND_URL/users/all" > /dev/null 2>&1; then
+              echo "✓ Backend API is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30: Backend not ready yet..."
+            sleep 2
+          done
+          
+          echo "✗ Backend API failed to start"
+          docker compose logs server
+          exit 1
+          EOF
+
+      - name: Wait for Frontend
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          FRONTEND_URL="http://127.0.0.1:4172"
+          echo "Waiting for Frontend at $FRONTEND_URL..."
+          
+          for i in {1..30}; do
+            if curl -sf "$FRONTEND_URL" > /dev/null 2>&1; then
+              echo "✓ Frontend is ready"
+              exit 0
+            fi
+            echo "Attempt $i/30: Frontend not ready yet..."
+            sleep 2
+          done
+          
+          echo "✗ Frontend failed to start"
+          docker compose logs client
+          exit 1
+          EOF
+
+      - name: Run API Tests
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          set -e
+          echo "═══════════════════════════════════════"
+          echo "Running API Tests..."
+          echo "═══════════════════════════════════════"
+          
+          # Test 1: Get all users
+          echo ""
+          echo "Test 1: GET /users/all"
+          USERS_COUNT=$(curl -s http://127.0.0.1:7999/users/all?page=1&limit=10 | grep -o '"id"' | wc -l)
+          echo "✓ Retrieved $USERS_COUNT users"
+          
+          # Test 2: Get specific user
+          echo ""
+          echo "Test 2: GET /user/:id"
+          USER_RESPONSE=$(curl -s http://127.0.0.1:7999/user/1)
+          if echo "$USER_RESPONSE" | grep -q '"name"'; then
+            echo "✓ User detail endpoint working"
+          else
+            echo "✗ User detail endpoint failed"
+            exit 1
+          fi
+          
+          # Test 3: Frontend loads
+          echo ""
+          echo "Test 3: Frontend Content"
+          if curl -s http://127.0.0.1:4172 | grep -q "root"; then
+            echo "✓ Frontend React app is rendering"
+          else
+            echo "✗ Frontend not rendering correctly"
+            exit 1
+          fi
+          
+          echo ""
+          echo "═══════════════════════════════════════"
+          echo "✅ All tests passed!"
+          echo "═══════════════════════════════════════"
+          EOF
+
+      - name: Log deployment summary
+        if: always()
+        run: |
+          cat << 'EOF'
+          
+          ╔════════════════════════════════════════════════════════════╗
+          ║           🚀 Deployment Summary                            ║
+          ╚════════════════════════════════════════════════════════════╝
+          
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref }}
+          Commit: ${{ github.sha }}
+          Timestamp: $(date)
+          
+          Access your application:
+          📍 Frontend: http://${{ secrets.EC2_PUBLIC_IP }}:4172
+          📍 Backend API: http://${{ secrets.EC2_PUBLIC_IP }}:7999
+          
+          SSH into instance:
+          ssh -i /path/to/private/key.pem ec2-user@${{ secrets.EC2_PUBLIC_IP }}
+          
+          ╔════════════════════════════════════════════════════════════╗
+          EOF
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          cat << 'EOF'
+          
+          ❌ Deployment failed!
+          
+          Debug steps:
+          1. SSH into instance: ssh -i key.pem ec2-user@${{ secrets.EC2_PUBLIC_IP }}
+          2. Check container status: docker compose ps
+          3. View logs: docker compose logs
+          4. Verify network: curl http://127.0.0.1:7999/users/all
+          
+          Common issues:
+          - SSH key not added to secrets
+          - EC2 instance not yet fully initialized
+          - Docker Compose file syntax error
+          - Port conflicts
+          
+          EOF
+          exit 1
