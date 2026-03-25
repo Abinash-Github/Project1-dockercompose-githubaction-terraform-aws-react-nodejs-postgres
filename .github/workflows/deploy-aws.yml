@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+  IMAGE_PREFIX: ghcr.io/abinash-github
 
 jobs:
   # ── Job 1: Build & push client image (GitHub Actions runner) ──
@@ -30,7 +30,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./client
-          dockerfile: ./client/Dockerfile
+          file: ./client/Dockerfile
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/user-management-client:latest
           build-args: |
@@ -57,7 +57,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./server
-          dockerfile: ./server/Dockerfile
+          file: ./server/Dockerfile
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/user-management-server:latest
 
@@ -112,7 +112,7 @@ jobs:
 
               server:
                 container_name: server
-                image: ghcr.io/${{ github.repository_owner }}/user-management-server:latest
+                image: ghcr.io/abinash-github/user-management-server:latest
                 ports:
                   - "7999:8000"
                 environment:
@@ -124,7 +124,7 @@ jobs:
 
               client:
                 container_name: client
-                image: ghcr.io/${{ github.repository_owner }}/user-management-client:latest
+                image: ghcr.io/abinash-github/user-management-client:latest
                 command: ["sh", "-c", "npm run preview"]
                 ports:
                   - "4172:4173"
@@ -138,11 +138,11 @@ jobs:
             COMPOSEEOF
 
             # Login to GHCR and pull fresh images
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io \
+            echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io \
               -u ${{ github.actor }} --password-stdin
 
-            docker pull ghcr.io/${{ github.repository_owner }}/user-management-client:latest
-            docker pull ghcr.io/${{ github.repository_owner }}/user-management-server:latest
+            docker pull ghcr.io/abinash-github/user-management-client:latest
+            docker pull ghcr.io/abinash-github/user-management-server:latest
 
             # Restart containers
             cd ~/app
