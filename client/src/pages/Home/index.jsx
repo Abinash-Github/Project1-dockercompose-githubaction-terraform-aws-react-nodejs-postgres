@@ -1,171 +1,103 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import "./index.css";
-import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 5,
-    total: 0,
-  });
-  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [theme, setTheme] = useState("dark");
+  const usersPerPage = 6;
+
+  const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:7999";
 
   useEffect(() => {
-    fetchUsers();
-  }, [pagination.page, pagination.limit]);
+    fetch(`${API_URL}/users/all`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setUsers(json.data.users || []);
+      });
+  }, [API_URL]);
 
-  const API_URL = import.meta.env.VITE_SERVER_URL || "http://127.0.0.1:7999";
-  console.log("Home API_URL:", API_URL);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/users/all?page=${pagination.page}&limit=${pagination.limit}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const json = await response.json();
-
-      if (json.success) {
-        setUsers(json.data.users);
-        setPagination((prevState) => ({
-          ...prevState,
-          total: json.data.total,
-        }));
-      } else {
-        throw new Error(json.message || 'Failed to fetch users');
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-      setError(err.message);
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
   };
 
-  const handleUserClick = (userId) => {
-    navigate(`/user/${userId}`);
-  };
-
-  const totalPages = Math.ceil(pagination.total / pagination.limit);
-
-  if (loading) {
-    return (
-      <div className="home">
-        <h1 className="header">User List</h1>
-        <div className="loading">Loading users...</div>
-      </div>
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => 
+      `${u.first_name} ${u.last_name}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }
+  }, [users, searchTerm]);
 
-  if (error) {
-    return (
-      <div className="home">
-        <h1 className="header">User List</h1>
-        <div className="error">
-          <strong>Error loading users:</strong> {error}
-          <br />
-          <button onClick={fetchUsers} style={{ marginTop: '1rem' }}>
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const currentUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
+
+  const UserIcon = () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="user-icon-svg">
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+    </svg>
+  );
 
   return (
-    <div className="home">
-      <h1 className="header">
-        User List {pagination.total > 0 && `(${pagination.total})`}
-      </h1>
-
-      {users.length === 0 ? (
-        <div className="success" style={{ textAlign: 'center', padding: '2rem' }}>
-          No users found. The database might be empty.
-        </div>
-      ) : (
-        <>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>Email</th>
-                <th>Gender</th>
-                <th>Phone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(({ id, first_name, last_name, email, gender, phone }) => (
-                <tr
-                  key={id}
-                  onClick={() => handleUserClick(id)}
-                  title="Click to view user details"
-                >
-                  <td>#{id}</td>
-                  <td>{first_name}</td>
-                  <td>{last_name}</td>
-                  <td>{email}</td>
-                  <td>
-                    <span style={{
-                      background: gender === 'MALE' ? '#dbeafe' : gender === 'FEMALE' ? '#fce7f3' : '#f3f4f6',
-                      color: gender === 'MALE' ? '#1e40af' : gender === 'FEMALE' ? '#be185d' : '#374151',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '4px',
-                      fontSize: '0.8rem',
-                      fontWeight: '500'
-                    }}>
-                      {gender}
-                    </span>
-                  </td>
-                  <td>{phone}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                disabled={pagination.page === 1}
-                style={{ opacity: pagination.page === 1 ? 0.5 : 1 }}
-              >
-                ← Previous
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                <button
-                  key={pageNum}
-                  className={pageNum === pagination.page ? "button-active" : ""}
-                  onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
-                >
-                  {pageNum}
-                </button>
-              ))}
-
-              <button
-                onClick={() => setPagination(prev => ({ ...prev, page: Math.min(totalPages, prev.page + 1) }))}
-                disabled={pagination.page === totalPages}
-                style={{ opacity: pagination.page === totalPages ? 0.5 : 1 }}
-              >
-                Next →
-              </button>
+    <div className="app-viewport">
+      <header className="sticky-header">
+        <div className="header-content">
+          <div className="brand-zone">
+            <h1 className="breathing-logo">USER<span>BASE</span></h1>
+            <div className="nav-separator"></div>
+            <span className="system-label">User Management System</span>
+          </div>
+          
+          <div className="action-zone">
+            <div className="search-box-container">
+              <input 
+                type="text" 
+                placeholder="Search directory..." 
+                className="header-search"
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              />
             </div>
-          )}
-        </>
-      )}
+            <button onClick={toggleTheme} className="theme-toggle">
+              {theme === "dark" ? "☀️ LIGHT" : "🌙 DARK"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="main-content">
+        <div className="stats-header">
+          <p>Total Records: <strong>{users.length}</strong> | Filtered: <strong>{filteredUsers.length}</strong></p>
+        </div>
+
+        <div className="funky-grid">
+          {currentUsers.map((user) => (
+            <div key={user.id} className="glass-card">
+              <div className="card-top-row">
+                <UserIcon />
+                <span className="id-badge">ID-{user.id}</span>
+              </div>
+              <h3 className="display-name">{user.first_name} {user.last_name}</h3>
+              <p className="display-email">{user.email}</p>
+              <div className="card-footer-row">
+                <span className="gender-tag">{user.gender}</span>
+                <button 
+                  className="pro-link-btn" 
+                  onClick={() => window.location.href = `/user/${user.id}`}
+                >
+                  VIEW PROFILE
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <footer className="pagination-controls">
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>PREV</button>
+          <span className="page-tracker">{currentPage} / {totalPages || 1}</span>
+          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)}>NEXT</button>
+        </footer>
+      </main>
     </div>
   );
 };

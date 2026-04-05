@@ -15,7 +15,7 @@ router.get("/users/all", async (req, res) => {
 
         if (!page && !limit) {
             page = 1;
-            limit = 5;
+            limit = 1000;
         }
 
         if (page <= 0) {

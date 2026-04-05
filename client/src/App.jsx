@@ -1,68 +1,31 @@
 import "./App.css";
-import { BrowserRouter, Navigate, Route, Routes, Link, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Home from "./pages/Home";
 import UserDetail from "./pages/UserDetail";
 
-// Header Component
-function Header() {
-  const location = useLocation();
-
-  return (
-    <header style={{
-      textAlign: 'center',
-      marginBottom: '2rem',
-      padding: '1rem 0'
-    }}>
-      <Link to="/" style={{
-        textDecoration: 'none',
-        fontSize: '1.5rem',
-        fontWeight: 'bold',
-        color: '#ffffff',
-        textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
-      }}>
-        User Management System
-      </Link>
-      {location.pathname !== '/' && (
-        <p style={{
-          margin: '0.5rem 0 0 0',
-          color: '#e0e7ff',
-          fontSize: '0.9rem'
-        }}>
-          Manage and view user information
-        </p>
-      )}
-    </header>
-  );
-}
-
-// Loading Component
+// Loading Component (Updated to match the dark neon theme)
 function LoadingSpinner() {
   return (
-    <div className="loading">
-      Loading users...
+    <div className="loading-overlay">
+      <div className="spinner-neon"></div>
+      <p>SYNCING DATABASE...</p>
     </div>
   );
 }
 
-// Main App Component
 function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate initial app load
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-
+    const timer = setTimeout(() => setIsLoading(false), 1000);
     return () => clearTimeout(timer);
   }, []);
 
   return (
     <BrowserRouter>
       <div className="App">
-        <Header />
-
+        {/* The redundant Header function has been removed to fix the brand split */}
         {isLoading ? (
           <LoadingSpinner />
         ) : (

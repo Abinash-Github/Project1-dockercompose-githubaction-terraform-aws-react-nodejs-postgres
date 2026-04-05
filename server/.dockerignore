@@ -3,4 +3,4 @@ dist
 *.log
 .env
 .DS_Store
-eslint.config.js
+eslint.config.jsP

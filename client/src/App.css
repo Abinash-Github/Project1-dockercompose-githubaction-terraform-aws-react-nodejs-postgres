@@ -1,45 +1,30 @@
-/* App.css - Main application styles */
-
+/* Ensure the body gradient matches your theme and doesn't create gaps */
 .App {
   min-height: 100vh;
+  background: linear-gradient(135deg, #050505 0%, #1a1a2e 100%);
+  transition: background 0.3s ease;
+}
+
+/* Funky Loading Spinner */
+.loading-overlay {
+  height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-/* Ensure smooth transitions between pages */
-.page-transition {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Loading states */
-.loading {
-  display: flex;
-  justify-content: center;
   align-items: center;
-  min-height: 200px;
-  color: #6b7280;
+  justify-content: center;
+  color: #00f2ff;
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 4px;
 }
 
-.loading::after {
-  content: "";
-  width: 24px;
-  height: 24px;
-  border: 3px solid #e5e7eb;
-  border-top: 3px solid #4f46e5;
+.spinner-neon {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(0, 242, 255, 0.1);
+  border-top: 3px solid #00f2ff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-left: 12px;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -47,22 +32,11 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Error states */
-.error {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #dc2626;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #fca5a5;
-  margin: 1rem 0;
+.page-transition {
+  animation: fadeIn 0.5s ease-out;
 }
 
-/* Success states */
-.success {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #059669;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #6ee7b7;
-  margin: 1rem 0;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
